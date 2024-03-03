@@ -8,6 +8,9 @@ project(
 
 add_executable(App main.cpp)
 
+add_subdirectory(glfw)
+target_link_libraries(App PRIVATE glfw)
+
 set_target_properties(App PROPERTIES
     CXX_STANDARD 17
     CXX_EXTENSIONS OFF
