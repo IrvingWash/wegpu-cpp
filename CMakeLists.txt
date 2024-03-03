@@ -9,7 +9,9 @@ project(
 add_executable(App main.cpp)
 
 add_subdirectory(glfw)
-target_link_libraries(App PRIVATE glfw)
+add_subdirectory(dawn)
+add_subdirectory(glfw3webgpu)
+target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
 
 set_target_properties(App PROPERTIES
     CXX_STANDARD 17
@@ -18,3 +20,4 @@ set_target_properties(App PROPERTIES
 )
 target_compile_options(App PRIVATE -Wall -Wextra -pedantic)
 
+target_copy_webgpu_binaries(App)
