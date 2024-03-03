@@ -43,7 +43,45 @@ WGPUAdapter requestAdapter(WGPUInstance instance, WGPURequestAdapterOptions cons
     return userData.adapter;
 }
 
+WGPUDevice requestDevice(WGPUAdapter adapter, WGPUDeviceDescriptor const* descriptor) {
+    struct UserData {
+        WGPUDevice device = nullptr;
+        bool requestEnded = false;
+    };
+    UserData userData;
+
+    auto onDeviceRequestEnded = [](
+        WGPURequestDeviceStatus status,
+        WGPUDevice device,
+        char const* message,
+        void* pUserData
+    ) {
+        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
+        if (status == WGPURequestDeviceStatus_Success) {
+            userData.device = device;
+        } else {
+            std::cout
+                << "Could not get WebGPU device: "
+                << message << std::endl;
+        }
+
+        userData.requestEnded = true;
+    };
+
+    wgpuAdapterRequestDevice(
+        adapter,
+        descriptor,
+        onDeviceRequestEnded,
+        (void*)&userData
+    );
+
+    assert(userData.requestEnded);
+
+    return userData.device;
+}
+
 int main() {
+    // ===== GLFW =====
     if (!glfwInit()) {
         std::cerr << "Could not initialize GLFW!" << std::endl;
         return 1;
@@ -62,6 +100,7 @@ int main() {
         glfwPollEvents();
     }
 
+    // ===== WGPU Instance =====
     WGPUInstanceDescriptor desc = {};
     desc.nextInChain = nullptr;
 
@@ -72,6 +111,7 @@ int main() {
         return 1;
     }
 
+    // ===== WGPU Adapter =====
     WGPURequestAdapterOptions options = {};
     options.nextInChain = nullptr;
     WGPUSurface surface = glfwGetWGPUSurface(instance, window);
@@ -87,13 +127,32 @@ int main() {
 
     wgpuAdapterEnumerateFeatures(adapter, features.data());
 
-    std::cout << "Adapter features" << std::endl;
+    // ===== WGPU Device =====
+    WGPUDeviceDescriptor deviceDescriptor = {};
+    deviceDescriptor.nextInChain = nullptr;
+    deviceDescriptor.label = "My device";
+    deviceDescriptor.requiredFeaturesCount = 0;
+    deviceDescriptor.requiredLimits = nullptr;
+    deviceDescriptor.defaultQueue.nextInChain = nullptr;
+    deviceDescriptor.defaultQueue.label = "My default queue";
 
-    for (auto feature : features) {
-            std::cout << " - " << feature << std::endl;
-    }
+    WGPUDevice device = requestDevice(adapter, &deviceDescriptor);
 
+    auto onDeviceError = [](
+        WGPUErrorType type,
+        char const* message,
+        void* /* pUserData */
+    ) {
+        std::cout << "Uncaptured device error: type " << type;
+        if (message) std::cout << " (" << message << ")";
+        std::cout << std::endl;
+    };
+
+    wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr);
+
+    wgpuDeviceRelease(device);
     wgpuSurfaceRelease(surface);
+    wgpuAdapterRelease(adapter);
     wgpuInstanceRelease(instance);
     glfwDestroyWindow(window);
     glfwTerminate();
